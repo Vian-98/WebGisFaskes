@@ -26,14 +26,6 @@ async function snapshotSchema() {
   };
 }
 
-beforeAll(async () => {
-  await runMigrations();
-});
-
-afterAll(async () => {
-  await pool.end();
-});
-
 test("Property 19: running migrations multiple times is idempotent", async () => {
   await fc.assert(
     fc.asyncProperty(fc.integer({ min: 1, max: 3 }), async (runs) => {

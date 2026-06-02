@@ -1,5 +1,5 @@
 // Feature: gis-faskes-bandar-lampung, Property 15: Rate Limiting Enforced After 5 Failed Login Attempts
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import { loginRateLimiter } from "../rateLimit";
@@ -11,6 +11,12 @@ function createApp() {
 }
 
 describe("Property 15: rate limiting after 5 failed attempts", () => {
+  beforeEach(() => {
+    loginRateLimiter.resetKey("127.0.0.1");
+    loginRateLimiter.resetKey("::ffff:127.0.0.1");
+    loginRateLimiter.resetKey("::1");
+  });
+
   test("sixth attempt is rejected", async () => {
     const app = createApp();
     const agent = request.agent(app);

@@ -76,6 +76,9 @@ app.innerHTML = `
       </aside>
       <section class="map-area">
         <div id="map"></div>
+        <button id="btn-locate" class="btn-locate" title="Lokasi Saya" aria-label="Temukan Lokasi Saya">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+        </button>
         <div class="map-legend">
           <span>Legenda</span>
           <div class="legend-list" id="legend-list"></div>
@@ -95,11 +98,14 @@ const statusEl = document.getElementById("status") as HTMLDivElement;
 const nearestList = document.getElementById("nearest-list") as HTMLOListElement;
 const coverageStats = document.getElementById("coverage-stats") as HTMLDivElement;
 const legendList = document.getElementById("legend-list") as HTMLDivElement;
+const btnLocate = document.getElementById("btn-locate") as HTMLButtonElement;
 
 const map = L.map("map", { zoomControl: false }).setView([-5.4, 105.26], 12);
 L.control.zoom({ position: "topright" }).addTo(map);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution: "&copy; OpenStreetMap contributors",
+L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 20
 }).addTo(map);
 
 const layers = {
@@ -107,6 +113,7 @@ const layers = {
   buffers: L.layerGroup().addTo(map),
   boundaries: L.layerGroup().addTo(map),
   analysis: L.layerGroup().addTo(map),
+  userLocation: L.layerGroup().addTo(map),
 };
 
 const store = createStore();
@@ -312,6 +319,39 @@ map.on("click", (event) => {
   const nearest = findNearestFacilities(store.getState().faskes, point, 5);
   store.setState({ analysisPoint: point, nearestFacilities: nearest });
   renderAnalysisPoint();
+});
+
+btnLocate.addEventListener("click", () => {
+  btnLocate.classList.add("loading");
+  map.locate({ setView: true, maxZoom: 16 });
+});
+
+map.on("locationfound", (e) => {
+  btnLocate.classList.remove("loading");
+  layers.userLocation.clearLayers();
+  
+  const radius = e.accuracy;
+  L.circle(e.latlng, {
+    radius: radius,
+    color: "#3f6fd8",
+    fillColor: "#3f6fd8",
+    fillOpacity: 0.15,
+    weight: 2
+  }).addTo(layers.userLocation);
+
+  L.circleMarker(e.latlng, {
+    radius: 8,
+    fillColor: "#3f6fd8",
+    color: "#fff",
+    weight: 3,
+    fillOpacity: 1
+  }).addTo(layers.userLocation)
+    .bindPopup("Lokasi Anda saat ini").openPopup();
+});
+
+map.on("locationerror", (e) => {
+  btnLocate.classList.remove("loading");
+  alert("Tidak dapat mengakses lokasi Anda. Pastikan GPS aktif dan Anda telah memberikan izin di browser.");
 });
 
 function renderSearchResults() {

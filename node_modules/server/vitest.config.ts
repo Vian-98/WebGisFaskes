@@ -7,6 +7,12 @@ export default defineConfig({
     sequence: {
       concurrent: false,
     },
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
     testTimeout: 30000,
     hookTimeout: 30000,
   },

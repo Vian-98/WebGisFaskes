@@ -93,26 +93,32 @@ async function run(): Promise<void> {
   let inserted = 0;
   let skipped = 0;
 
+  const rows: FaskesRow[] = [];
+
   await new Promise<void>((resolve, reject) => {
     createReadStream(csvPath)
       .pipe(csv())
-      .on("data", async (row: FaskesRow) => {
-        total += 1;
-        try {
-          const ok = await insertRow(row);
-          if (ok) {
-            inserted += 1;
-          } else {
-            skipped += 1;
-          }
-        } catch (error) {
-          skipped += 1;
-          console.warn("Failed to import row", error);
-        }
+      .on("data", (row: FaskesRow) => {
+        rows.push(row);
       })
       .on("end", () => resolve())
       .on("error", (error) => reject(error));
   });
+
+  for (const row of rows) {
+    total += 1;
+    try {
+      const ok = await insertRow(row);
+      if (ok) {
+        inserted += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (error) {
+      skipped += 1;
+      console.warn("Failed to import row", error);
+    }
+  }
 
   console.log("Import faskes selesai", { total, inserted, skipped });
   await pool.end();

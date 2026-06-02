@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import request from "supertest";
 import app from "../../app";
 import { resetDatabase, seedAdmin } from "../../test/db";
+import { loginRateLimiter } from "../../middleware/rateLimit";
 
 const adminUser = { username: "admin", password: "secret123" };
 
@@ -9,6 +10,9 @@ describe("Auth integration", () => {
   beforeEach(async () => {
     await resetDatabase();
     await seedAdmin(adminUser.username, adminUser.password);
+    loginRateLimiter.resetKey("127.0.0.1");
+    loginRateLimiter.resetKey("::ffff:127.0.0.1");
+    loginRateLimiter.resetKey("::1");
   });
 
   test("login with valid credentials returns session", async () => {

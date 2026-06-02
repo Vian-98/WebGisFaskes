@@ -45,7 +45,7 @@ export function validateBoundaryGeometry(geometry: unknown): {
 
   if (geom.type === "Polygon") {
     const rings = geom.coordinates as unknown;
-    if (!Array.isArray(rings) || !rings.every(isValidRing)) {
+    if (!Array.isArray(rings) || rings.length === 0 || !rings.every(isValidRing)) {
       return { valid: false, error: "Polygon memiliki ring yang tidak valid." };
     }
     return { valid: true };
@@ -53,12 +53,12 @@ export function validateBoundaryGeometry(geometry: unknown): {
 
   if (geom.type === "MultiPolygon") {
     const polygons = geom.coordinates as unknown;
-    if (!Array.isArray(polygons)) {
+    if (!Array.isArray(polygons) || polygons.length === 0) {
       return { valid: false, error: "MultiPolygon memiliki ring yang tidak valid." };
     }
 
     for (const rings of polygons) {
-      if (!Array.isArray(rings) || !rings.every(isValidRing)) {
+      if (!Array.isArray(rings) || rings.length === 0 || !rings.every(isValidRing)) {
         return { valid: false, error: "MultiPolygon memiliki ring yang tidak valid." };
       }
     }
