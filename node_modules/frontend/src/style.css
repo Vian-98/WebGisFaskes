@@ -1,0 +1,275 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+:root {
+  font-family: "Space Grotesk", sans-serif;
+  color: #0b1418;
+  background: #f4efe9;
+  --teal: #2d8f7e;
+  --amber: #f2b705;
+  --deep: #0b1418;
+  --paper: #f4efe9;
+  --sand: #efe3d2;
+  --ink: #1f2a30;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, #fff7ed 0%, #efe3d2 55%, #e7d6c3 100%);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 32px;
+  border-bottom: 1px solid rgba(11, 20, 24, 0.12);
+  background: rgba(244, 239, 233, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+.brand {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.brand-mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f2b705, #e07a3f);
+  box-shadow: 0 10px 20px rgba(224, 122, 63, 0.3);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: rgba(11, 20, 24, 0.6);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.status {
+  padding: 8px 14px;
+  background: #0b1418;
+  color: #f4efe9;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.status.error {
+  background: #cf3b2b;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 24px;
+  padding: 24px 32px 32px;
+  flex: 1;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 22px;
+  box-shadow: 0 20px 50px rgba(11, 20, 24, 0.08);
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.field input,
+.field select {
+  padding: 10px 12px;
+  border: 1px solid rgba(11, 20, 24, 0.2);
+  border-radius: 12px;
+  font-family: inherit;
+}
+
+.primary {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: none;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(45, 143, 126, 0.25);
+}
+
+.hint {
+  font-size: 12px;
+  color: rgba(11, 20, 24, 0.6);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-item {
+  border: 1px solid rgba(11, 20, 24, 0.1);
+  background: #fff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-item span {
+  font-size: 12px;
+  color: rgba(11, 20, 24, 0.6);
+}
+
+.nearest {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nearest li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.nearest li span {
+  color: rgba(11, 20, 24, 0.6);
+  font-size: 12px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.stats div {
+  background: #fff;
+  padding: 12px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.map-area {
+  position: relative;
+  border-radius: 26px;
+  overflow: hidden;
+  min-height: 520px;
+  box-shadow: 0 30px 60px rgba(11, 20, 24, 0.15);
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+}
+
+.map-legend {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  padding: 12px 14px;
+  background: rgba(11, 20, 24, 0.8);
+  color: #f4efe9;
+  border-radius: 14px;
+  font-size: 12px;
+}
+
+.legend-list {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.legend-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--marker-color);
+}
+
+.marker-dot {
+  background: transparent;
+  border: none;
+}
+
+.marker-dot span {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--marker-color);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.8);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 14px;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .map-area {
+    min-height: 420px;
+  }
+}
