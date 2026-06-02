@@ -1,0 +1,313 @@
+# Implementation Plan: GIS Analisis Jangkauan Faskes Bandar Lampung
+
+## Overview
+
+Implementasi dilakukan secara bertahap mengikuti arsitektur full-stack monorepo:
+`packages/server` (Node.js/Express/Drizzle/PostGIS) → `packages/frontend` (Vite/TypeScript/Leaflet/Turf.js) → `packages/admin` (Vite/TypeScript).
+Seluruh analisis spasial berjalan di sisi klien (Turf.js); backend hanya menyajikan data dari PostgreSQL/PostGIS.
+
+---
+
+## Tasks
+
+- [ ] 1. Setup Monorepo dan Struktur Proyek
+  - [ ] 1.1 Inisialisasi workspace root dengan npm workspaces
+    - Buat `package.json` root dengan field `workspaces: ["packages/*"]`
+    - Buat direktori `packages/server`, `packages/frontend`, `packages/admin`
+    - Tambahkan scripts root: `dev`, `build`, `test`
+    - _Requirements: 11, 15_
+  - [ ] 1.2 Setup `packages/server` dengan TypeScript dan dependensi backend
+    - Inisialisasi `package.json` untuk package server
+    - Install: `express`, `drizzle-orm`, `pg`, `connect-pg-simple`, `express-session`, `bcryptjs`, `express-rate-limit`, `zod`, `cors`, `dotenv`
+    - Install dev: `typescript`, `tsx`, `@types/express`, `@types/pg`, `@types/bcryptjs`, `@types/express-session`, `drizzle-kit`, `vitest`, `supertest`, `@types/supertest`, `fast-check`
+    - Buat `tsconfig.json` untuk server (target ES2022, module CommonJS)
+    - _Requirements: 11, 12, 15_
+  - [ ] 1.3 Setup `packages/frontend` dengan Vite dan dependensi frontend
+    - Inisialisasi project Vite + TypeScript untuk frontend publik
+    - Install: `leaflet`, `@turf/turf`, `html2canvas`
+    - Install dev: `vite`, `typescript`, `@types/leaflet`, `vitest`, `fast-check`, `playwright`
+    - Buat struktur direktori: `src/data/`, `src/analysis/`, `src/map/`, `src/export/`, `src/state/`
+    - _Requirements: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10_
+  - [ ] 1.4 Setup `packages/admin` dengan Vite dan dependensi admin panel
+    - Inisialisasi project Vite + TypeScript untuk admin panel
+    - Install: `leaflet`
+    - Install dev: `vite`, `typescript`, `@types/leaflet`, `vitest`
+    - Buat struktur direktori: `src/pages/`, `src/components/`
+    - _Requirements: 12, 13, 14_
+
+- [ ] 2. Database Setup — PostgreSQL, PostGIS, Drizzle ORM, dan Migrasi
+  - [ ] 2.1 Buat Drizzle schema untuk tabel `faskes`, `boundaries`, dan `admins`
+    - Tulis `packages/server/src/db/schema.ts` dengan definisi tabel menggunakan Drizzle ORM
+    - Definisikan tabel `faskes`: `id` (UUID PK), `nama`, `jenis`, `alamat`, `kecamatan`, `kelurahan`; kolom `geom` dikelola via raw SQL
+    - Definisikan tabel `boundaries`: `id` (UUID PK), `nama`, `level` dengan check constraint
+    - Definisikan tabel `admins`: `id`, `username` (unique), `password_hash`, `created_at`
+    - Buat `packages/server/src/db/index.ts` untuk inisialisasi koneksi Drizzle dengan `pg`
+    - _Requirements: 15.1, 15.2, 15.3_
+  - [ ] 2.2 Buat skrip migrasi SQL idempoten dengan PostGIS
+    - Buat `packages/server/src/db/migrations/0001_initial.sql`
+    - SQL: `CREATE EXTENSION IF NOT EXISTS postgis`
+    - SQL: `CREATE TABLE IF NOT EXISTS faskes` dengan kolom dan constraint sesuai desain, termasuk `geom geometry(Point, 4326) NOT NULL`
+    - SQL: `CREATE INDEX IF NOT EXISTS faskes_geom_gist ON faskes USING GIST (geom)`
+    - SQL: `CREATE TABLE IF NOT EXISTS boundaries` dengan `geom geometry(MultiPolygon, 4326) NOT NULL`
+    - SQL: `CREATE INDEX IF NOT EXISTS boundaries_geom_gist ON boundaries USING GIST (geom)`
+    - SQL: `CREATE TABLE IF NOT EXISTS admins` dan tabel `sessions` untuk connect-pg-simple
+    - Buat `packages/server/src/db/migrate.ts` sebagai script runner migrasi
+    - _Requirements: 15.4, 15.7_
+  - [ ]* 2.3 Tulis property test untuk idempoten migrasi (Property 19)
+    - **Property 19: Database Migration is Idempotent**
+    - Verifikasi bahwa menjalankan migrasi berkali-kali menghasilkan state DB yang identik
+    - **Validates: Requirements 15.7**
+    - _File: `packages/server/src/db/__tests__/migration.property.test.ts`_
+
+- [ ] 3. Backend — Zod Validation Schemas dan Geometry Validator
+  - [ ] 3.1 Implementasi Zod schemas untuk validasi input faskes dan boundary
+    - Buat `packages/server/src/schemas/faskes.schema.ts`
+    - Definisikan `FaskesCreateSchema` dengan validasi `nama`, `jenis`, koordinat dalam bounding box Bandar Lampung (`-5.52 ≤ lat ≤ -5.28`, `105.18 ≤ lon ≤ 105.42`)
+    - Definisikan `FaskesUpdateSchema` sebagai partial dari FaskesCreateSchema
+    - Definisikan `BoundaryUpdateSchema` dan `BoundaryGeometrySchema`
+    - Export TypeScript types dari schema
+    - _Requirements: 13.3, 13.8, 14.3_
+  - [ ] 3.2 Implementasi `validateBoundaryGeometry` di server
+    - Buat `packages/server/src/utils/geometryValidator.ts`
+    - Implementasi fungsi `isValidRing(ring)`: cek minimal 4 titik dan ring tertutup (first === last)
+    - Implementasi fungsi `validateBoundaryGeometry(geometry)`: terima Polygon atau MultiPolygon, validasi semua ring
+    - Return `{ valid: boolean; error?: string }`
+    - _Requirements: 14.5, 14.6_
+  - [ ]* 3.3 Tulis property test untuk Zod schema faskes (Property 17)
+    - **Property 17: Invalid Faskes Input Rejected with Field-Specific Errors**
+    - Generate arbitrary faskes payloads dengan setidaknya satu field tidak valid
+    - Verifikasi `FaskesCreateSchema.safeParse()` mengembalikan error dengan field yang sesuai
+    - **Validates: Requirements 13.3, 13.8**
+    - _File: `packages/server/src/schemas/__tests__/faskes.schema.property.test.ts`_
+  - [ ]* 3.4 Tulis property test untuk `validateBoundaryGeometry` (Property 9 — bagian backend)
+    - **Property 9: Coordinate and GeoJSON Validation (bagian geometry validator)**
+    - Generate arbitrary Polygon/MultiPolygon dengan ring valid dan tidak valid
+    - Verifikasi accept/reject sesuai aturan (ring tertutup, ≥ 4 titik)
+    - **Validates: Requirements 9.4, 9.5, 14.5**
+    - _File: `packages/server/src/utils/__tests__/geometryValidator.property.test.ts`_
+  - [ ]* 3.5 Tulis property test untuk BoundaryUpdateSchema (Property 18)
+    - **Property 18: Invalid Boundary Metadata Input Rejected**
+    - Generate arbitrary boundary metadata dengan nama kosong atau level tidak valid
+    - Verifikasi schema mengembalikan error yang tepat
+    - **Validates: Requirements 14.3**
+    - _File: `packages/server/src/schemas/__tests__/boundary.schema.property.test.ts`_
+
+- [ ] 4. Backend — Auth Middleware dan Session Management
+  - [ ] 4.1 Implementasi `requireAuth` middleware dan konfigurasi session
+    - Buat `packages/server/src/middleware/auth.ts`
+    - Implementasi `requireAuth(req, res, next)`: cek `req.session?.adminId`; kembalikan 401 jika tidak ada
+    - Konfigurasi `express-session` dengan `connect-pg-simple` store di `packages/server/src/app.ts`
+    - Set session maxAge = 8 jam (28800000 ms)
+    - _Requirements: 12.4, 12.8_
+  - [ ] 4.2 Implementasi `loginRateLimiter` middleware
+    - Buat `packages/server/src/middleware/rateLimit.ts`
+    - Konfigurasi `express-rate-limit`: `windowMs: 15 * 60 * 1000`, `max: 5`
+    - Set pesan error: `"Terlalu banyak percobaan login. Coba lagi dalam 15 menit."`
+    - Set `standardHeaders: true`, `legacyHeaders: false`
+    - _Requirements: 12.5_
+  - [ ] 4.3 Implementasi fungsi `hashPassword` dan `verifyPassword`
+    - Buat `packages/server/src/auth/password.ts`
+    - Implementasi `hashPassword(plain)`: gunakan `bcryptjs.hash(plain, 10)` (cost factor ≥ 10)
+    - Implementasi `verifyPassword(plain, hash)`: gunakan `bcryptjs.compare(plain, hash)`
+    - _Requirements: 12.7_
+  - [ ]* 4.4 Tulis property test untuk `hashPassword` (Property 16)
+    - **Property 16: Password Stored as bcrypt Hash with Sufficient Cost Factor**
+    - Generate arbitrary password strings (minLength: 1, maxLength: 72)
+    - Verifikasi hash dapat diverifikasi dengan `bcrypt.compare`, hash !== password, cost factor ≥ 10
+    - **Validates: Requirements 12.7**
+    - _File: `packages/server/src/auth/__tests__/password.property.test.ts`_
+  - [ ]* 4.5 Tulis property test untuk `requireAuth` (Property 14)
+    - **Property 14: Unauthenticated Requests Rejected on All Protected Routes**
+    - Generate arbitrary HTTP requests tanpa session cookie ke protected routes
+    - Verifikasi server selalu mengembalikan 401
+    - **Validates: Requirements 12.4**
+    - _File: `packages/server/src/middleware/__tests__/auth.property.test.ts`_
+  - [ ]* 4.6 Tulis property test untuk rate limiter (Property 15)
+    - **Property 15: Rate Limiting Enforced After 5 Failed Login Attempts**
+    - Simulasi 5 percobaan gagal dari satu IP, verifikasi percobaan ke-6 ditolak dengan 429
+    - **Validates: Requirements 12.5**
+    - _File: `packages/server/src/middleware/__tests__/rateLimit.property.test.ts`_
+
+- [ ] 5. Backend — Public API Routes
+  - [ ] 5.1 Implementasi public route handler untuk faskes
+    - Buat `packages/server/src/routes/public.ts`
+    - Implementasi helper `rowToFaskesFeature(row)`: konversi row DB ke GeoJSON Feature
+    - Implementasi `GET /api/faskes`: query `SELECT id, nama, jenis, alamat, kecamatan, kelurahan, ST_AsGeoJSON(geom)::json AS geometry FROM faskes`, return FeatureCollection
+    - Implementasi `GET /api/faskes/:id`: query by UUID, return Feature atau 404
+    - Tangani DB unreachable dengan return 503 + pesan error
+    - Set header `Content-Type: application/json`
+    - _Requirements: 11.1, 11.2, 11.5, 11.6, 11.7_
+  - [ ] 5.2 Implementasi public route handler untuk boundaries
+    - Dalam `packages/server/src/routes/public.ts`
+    - Implementasi helper `rowToBoundaryFeature(row)`: konversi row DB ke GeoJSON Feature
+    - Implementasi `GET /api/boundaries`: query dengan `ST_AsGeoJSON(geom)`, return FeatureCollection
+    - Implementasi `GET /api/boundaries/:id`: query by UUID, return Feature atau 404
+    - Tangani DB unreachable dengan return 503
+    - _Requirements: 11.3, 11.4, 11.5, 11.6, 11.7_
+  - [ ]* 5.3 Tulis property test untuk Collection Endpoint Serialization (Property 11)
+    - **Property 11: Collection Endpoint Returns Valid GeoJSON FeatureCollection**
+    - Generate arbitrary array DB rows, verifikasi `buildFaskesFeatureCollection()` menghasilkan FeatureCollection dengan panjang yang sama
+    - **Validates: Requirements 11.1, 11.3**
+    - _File: `packages/server/src/routes/__tests__/public.property.test.ts`_
+  - [ ]* 5.4 Tulis property test untuk Lookup by ID (Property 12)
+    - **Property 12: Lookup by ID Returns Matching GeoJSON Feature**
+    - Generate arbitrary DB record, verifikasi GET by ID mengembalikan Feature yang identik
+    - **Validates: Requirements 11.2, 11.4**
+    - _File: `packages/server/src/routes/__tests__/public.property.test.ts`_
+  - [ ]* 5.5 Tulis property test untuk Not-Found Returns 404 (Property 13)
+    - **Property 13: Not-Found ID Returns 404**
+    - Generate arbitrary UUID yang tidak ada di dataset mock, verifikasi response 404 dengan field `error`
+    - **Validates: Requirements 11.5**
+    - _File: `packages/server/src/routes/__tests__/public.property.test.ts`_
+
+- [ ] 6. Backend — Admin API Routes dan Auth Routes
+  - [ ] 6.1 Implementasi auth routes (login dan logout)
+    - Buat `packages/server/src/routes/auth.ts`
+    - Implementasi `POST /api/auth/login`: apply `loginRateLimiter`, validasi body dengan Zod, query DB untuk admin, verifikasi password dengan `bcryptjs.compare`, set `req.session.adminId` pada sukses, return 401 dengan pesan generic pada gagal
+    - Implementasi `POST /api/auth/logout`: apply `requireAuth`, destroy session, return 200
+    - _Requirements: 12.1, 12.2, 12.3, 12.5, 12.6_
+  - [ ] 6.2 Implementasi admin routes untuk CRUD faskes
+    - Buat `packages/server/src/routes/admin.ts`
+    - Apply `requireAuth` middleware pada semua route di router ini
+    - Implementasi `GET /api/admin/faskes`: query semua faskes (sama seperti public)
+    - Implementasi `POST /api/admin/faskes`: validasi `FaskesCreateSchema`, insert ke DB dengan `ST_SetSRID(ST_MakePoint(lon, lat), 4326)`, return 201 + record baru
+    - Implementasi `PUT /api/admin/faskes/:id`: validasi `FaskesUpdateSchema`, update record di DB, return 200 atau 404
+    - Implementasi `DELETE /api/admin/faskes/:id`: hapus record, return 204 atau 404
+    - Return 400 + `{ error, details }` pada validasi gagal
+    - _Requirements: 13.1, 13.3, 13.5, 13.7_
+  - [ ] 6.3 Implementasi admin routes untuk manajemen boundary
+    - Dalam `packages/server/src/routes/admin.ts`
+    - Implementasi `GET /api/admin/boundaries`: query semua boundaries
+    - Implementasi `PUT /api/admin/boundaries/:id`: validasi `BoundaryUpdateSchema`, update metadata (nama, level), return 200 atau 404
+    - Implementasi `PUT /api/admin/boundaries/:id/geometry`: parse request body sebagai GeoJSON, panggil `validateBoundaryGeometry()`, update `geom` dengan `ST_SetSRID(ST_GeomFromGeoJSON($1), 4326)`, return 200 atau 400
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6_
+  - [ ] 6.4 Buat `packages/server/src/app.ts` dan wiring semua middleware dan routes
+    - Setup Express app dengan middleware: `cors`, `express.json`, `express-session`, `connect-pg-simple`
+    - Mount `publicRouter` di `/api`
+    - Mount `authRouter` di `/api/auth`
+    - Mount `adminRouter` di `/api/admin` (dengan `requireAuth` di router level)
+    - Tambahkan global error handler middleware (return 500 untuk unhandled errors, 503 untuk DB errors)
+    - Buat `packages/server/src/index.ts` sebagai entry point
+    - _Requirements: 11.7, 11.8, 12, 13, 14, 15.6_
+
+- [ ] 7. Checkpoint Backend — Verifikasi API Server
+  - Pastikan semua unit test dan property test backend lulus
+  - Jalankan migrasi terhadap database test, verifikasi tabel dan indeks terbentuk
+  - Verifikasi server dapat start dan merespons request GET /api/faskes, GET /api/boundaries
+  - Tanya user jika ada pertanyaan sebelum melanjutkan ke fase frontend
+  - _Requirements: 11, 12, 13, 14, 15_
+
+- [ ] 8. Backend — Integration Tests dengan Supertest
+  - [ ] 8.1 Setup test environment backend (supertest + test DB)
+    - Buat `packages/server/src/test/setup.ts`: jalankan migrasi ke DB test, seed data awal, teardown setelah suite
+    - Konfigurasi Vitest untuk menjalankan integration tests dengan test DB
+    - _Requirements: 11, 12, 13, 14, 15_
+  - [ ]* 8.2 Tulis integration test untuk public API endpoints
+    - Test `GET /api/faskes` → 200 + FeatureCollection
+    - Test `GET /api/faskes/:id` dengan ID valid → 200 + Feature
+    - Test `GET /api/faskes/:id` dengan ID tidak ada → 404
+    - Test `GET /api/boundaries` → 200 + FeatureCollection
+    - Test `GET /api/boundaries/:id` dengan ID tidak ada → 404
+    - _File: `packages/server/src/routes/__tests__/public.integration.test.ts`_
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8_
+  - [ ]* 8.3 Tulis integration test untuk auth flow
+    - Test login dengan credentials valid → 200 + session cookie
+    - Test login dengan password salah → 401 dengan pesan generic
+    - Test akses admin route dengan session valid → 200
+    - Test akses admin route tanpa session → 401
+    - Test logout → 200, akses admin route setelah logout → 401
+    - Test 5 login gagal → percobaan ke-6 ditolak 429
+    - _File: `packages/server/src/routes/__tests__/auth.integration.test.ts`_
+    - _Requirements: 12.2, 12.3, 12.4, 12.5, 12.6_
+  - [ ]* 8.4 Tulis integration test untuk admin CRUD faskes
+    - Test POST /api/admin/faskes → 201 + record baru, GET by ID confirm ada
+    - Test PUT /api/admin/faskes/:id → 200 + data terupdate
+    - Test DELETE /api/admin/faskes/:id → 204, GET by ID → 404
+    - Test POST dengan payload tidak valid → 400 + `details` per field
+    - _File: `packages/server/src/routes/__tests__/admin.integration.test.ts`_
+    - _Requirements: 13.3, 13.5, 13.7, 13.8_
+  - [ ]* 8.5 Tulis integration test untuk admin boundary management
+    - Test PUT /api/admin/boundaries/:id metadata update → 200
+    - Test PUT /api/admin/boundaries/:id/geometry dengan GeoJSON valid → 200
+    - Test PUT /api/admin/boundaries/:id/geometry dengan GeoJSON tidak valid → 400
+    - _File: `packages/server/src/routes/__tests__/admin.integration.test.ts`_
+    - _Requirements: 14.2, 14.3, 14.4, 14.5, 14.6_
+
+- [ ] 9. Frontend — Data Module (API Client dan Validator)
+  - [ ] 9.1 Implementasi tipe domain dan interface GeoJSON
+    - Buat `packages/frontend/src/data/types.ts`
+    - Definisikan interface `FaskesProperties`, `FaskesFeature`, `BoundaryProperties`, `BoundaryFeature`
+    - Definisikan `ValidationResult<T>` dengan field `valid`, `invalid`, `errors`
+    - Definisikan `BANDAR_LAMPUNG_BBOX` constant
+    - _Requirements: 9.2, 9.3, 9.4_
+  - [ ] 9.2 Implementasi validator untuk faskes dan boundary
+    - Buat `packages/frontend/src/data/validator.ts`
+    - Implementasi `validateFaskesFeature(feature)`: cek type Point, longitude dan latitude dalam bounding box
+    - Implementasi `validateFaskesCollection(geojson)`: iterate features, collect valid/invalid
+    - Implementasi `validateBoundaryFeature(feature)`: cek type Polygon/MultiPolygon, validasi semua ring
+    - Implementasi `validateBoundaryCollection(geojson)`: iterate features, collect valid/invalid
+    - Log warning untuk setiap record tidak valid
+    - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.6_
+  - [ ] 9.3 Implementasi API client (fetch dari REST API)
+    - Buat `packages/frontend/src/data/apiClient.ts`
+    - Implementasi `fetchFaskes()`: `fetch(VITE_API_BASE_URL + '/faskes')`, handle 503 dengan pesan "Data tidak dapat dimuat. Periksa koneksi atau coba lagi nanti.", panggil `validateFaskesCollection()`
+    - Implementasi `fetchBoundaries()`: sama untuk boundaries
+    - Handle network error (fetch gagal) dengan pesan yang sama
+    - _Requirements: 9.1, 9.5, 9.7_
+  - [ ]* 9.4 Tulis property test untuk validator faskes dan boundary (Property 9 — bagian frontend)
+    - **Property 9: Coordinate and GeoJSON Validation (frontend validator)**
+    - Generate arbitrary faskes features dengan koordinat valid dan tidak valid
+    - Verifikasi accept/reject sesuai aturan bounding box
+    - Generate arbitrary boundary geometries dengan ring valid dan tidak valid
+    - Verifikasi accept/reject sesuai aturan ring
+    - **Validates: Requirements 9.2, 9.3, 9.4, 9.5**
+    - _File: `packages/frontend/src/data/__tests__/validator.property.test.ts`_
+
+- [ ] 10. Frontend — State Manager
+  - [ ] 10.1 Implementasi reactive state store
+    - Buat `packages/frontend/src/state/store.ts`
+    - Definisikan `AppState` interface: `faskes`, `boundaries`, `filteredFaskes`, `activeFilter`, `searchQuery`, `bufferRadius`, `bufferActive`, `analysisPoint`, `nearestFacilities`, `coverageStats`, `loading`, `errors`
+    - Implementasi `createStore()` dengan get/set/subscribe pattern (pub-sub sederhana)
+    - Implementasi `initializeData()`: panggil `fetchFaskes()` dan `fetchBoundaries()` secara parallel (`Promise.all`), update state, tangani error dengan `ErrorNotification`
+    - _Requirements: 2.1, 3.1, 9.1, 9.7_
+
+- [ ] 11. Frontend — Analysis Module (Turf.js)
+  - [ ] 11.1 Implementasi buffer dan coverage analysis
+    - Buat `packages/frontend/src/analysis/coverage.ts`
+    - Implementasi `validateBufferRadius(value)`: return `{ valid, error }` untuk range 100–5000
+    - Implementasi `computeBufferZones(faskes, radiusMeters)`: gunakan `turf.buffer()`, return array GeoJSON polygons
+    - Implementasi `computeUnionBuffer(bufferZones)`: gunakan `turf.union()` iteratif, return single polygon
+    - Implementasi `computeCoverageStats(boundary, unionBuffer)`: gunakan `turf.intersect()` dan `turf.area()`, return `{ coveredKm2, uncoveredKm2, percentageCovered }`; pastikan sum covered + uncovered = boundary area (±0.001 km²)
+    - _Requirements: 4.2, 4.3, 5.1, 5.3, 5.4, 5.5_
+  - [ ]* 11.2 Tulis property test untuk buffer radius validation (Property 4)
+    - **Property 4: Buffer Radius Validation**
+    - Generate arbitrary numerics: accept iff 100 ≤ r ≤ 5000, reject semua lainnya termasuk NaN dan negatif
+    - **Validates: Requirements 4.2**
+    - _File: `packages/frontend/src/analysis/__tests__/coverage.property.test.ts`_
+  - [ ]* 11.3 Tulis property test untuk coverage calculation (Property 5)
+    - **Property 5: Coverage Calculation Accuracy**
+    - Generate arbitrary boundary polygon dan union buffer, verifikasi sum covered + uncovered = total area (±0.001 km²) dan persentase = intersection/boundary × 100
+    - **Validates: Requirements 5.1, 5.3, 5.4, 5.5**
+    - _File: `packages/frontend/src/analysis/__tests__/coverage.property.test.ts`_
+  - [ ] 11.4 Implementasi filter, search, dan nearest facility
+    - Buat `packages/frontend/src/analysis/query.ts`
+    - Implementasi `filterByType(faskes, type)`: return semua features jika type = 'all', else filter by `jenis`
+    - Implementasi `searchByName(faskes, keyword)`: case-insensitive substring match pada `properties.nama`
+    - Implementasi `haversineDistance(p1, p2)`: hitung jarak dalam km menggunakan formula Haversine
+    - Implementasi `findNearestFacilities(faskes, point, limit)`: hitung jarak ke semua faskes, sort ascending, return top `limit`
+    - _Requirements: 6.2, 6.4, 7.2, 7.3, 7.4_
+  - [ ]* 11.5 Tulis property test untuk filter (Property 6)
+    - **Property 6: Filter Completeness and Exclusiveness**
+    - Generate arbitrary dataset + filter type T; verifikasi semua features dengan jenis === T included, semua lainnya excluded; filter 'all' mengembalikan semua
+    - **Validates: Requirements 6.2**
+    - _File: `packages/frontend/src/analysis/__tests__/query.property.test.ts`_
+  - [ ]* 11.6 Tulis property test untuk search (Property 7)
+    - **Property 7: Search Substring Matching**
+    - Generate arbitrary dataset + keyword; verifikasi semua features dengan nama.toLowerCase().includes(k.toLowerCase()) === true included
+    - **Validates: Requirements 6.4**
+    - _File: `packages/frontend/src/analysis/__tests__/query.property.test.ts`_
+  - [ ]* 11.7 Tulis property test untuk nearest facility (Property 8)
+    - **Property 8: Nearest Facility Distance Ordering**
+    - Generate arbitrary analysis point + faskes array; verifikasi hasil sorted ascending by distanceKm dan setiap distanceKm === haversine(point, faskes)
+    - **Validates: Requirements 7.2, 7.3, 7.4**
+    - _File: `packages/frontend/src/analysis/__tests__/query.property.test.ts`_
