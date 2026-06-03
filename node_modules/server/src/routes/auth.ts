@@ -53,6 +53,14 @@ router.post("/login", loginRateLimiter, async (req, res) => {
   }
 });
 
+router.get("/me", (req, res) => {
+  if (!req.session?.adminId) {
+    res.status(401).json({ error: "Tidak terautentikasi." });
+    return;
+  }
+  res.json({ ok: true, adminId: req.session.adminId });
+});
+
 router.post("/logout", requireAuth, (req, res) => {
   req.session.destroy((err) => {
     if (err) {

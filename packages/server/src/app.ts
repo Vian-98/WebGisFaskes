@@ -5,6 +5,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import cors from "cors";
 import dotenv from "dotenv";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import { pool } from "./db";
 import publicRouter from "./routes/public";
 import authRouter from "./routes/auth";
@@ -49,24 +50,48 @@ const adminDir = path.join(publicDir, "admin");
 const publicIndex = path.join(publicDir, "index.html");
 const adminIndex = path.join(adminDir, "index.html");
 
-app.use("/admin", express.static(adminDir));
-app.use(express.static(publicDir));
+const isProduction = process.env.NODE_ENV === "production";
 
-app.get(/^\/admin\/(.*)/, (req, res) => {
-  if (fs.existsSync(adminIndex)) {
-    res.sendFile(adminIndex);
-    return;
-  }
-  res.status(404).json({ error: "Halaman admin belum dibuild." });
-});
+if (!isProduction) {
+  // In dev mode, proxy non-API requests to Vite dev servers
+  // http-proxy-middleware v4: single options object with pathFilter
+  const adminProxy = createProxyMiddleware({
+    pathFilter: (path: string) => path.startsWith("/admin"),
+    target: "http://localhost:5174",
+    changeOrigin: true,
+    ws: true,
+  });
 
-app.get(/^\/(.*)/, (req, res) => {
-  if (fs.existsSync(publicIndex)) {
-    res.sendFile(publicIndex);
-    return;
-  }
-  res.status(404).json({ error: "Frontend belum dibuild." });
-});
+  const frontendProxy = createProxyMiddleware({
+    pathFilter: (path: string) =>
+      !path.startsWith("/api") && !path.startsWith("/admin"),
+    target: "http://localhost:5173",
+    changeOrigin: true,
+    ws: true,
+  });
+
+  app.use(adminProxy);
+  app.use(frontendProxy);
+} else {
+  app.use("/admin", express.static(adminDir));
+  app.use(express.static(publicDir));
+
+  app.get(/^\/admin\/(.*)/, (req, res) => {
+    if (fs.existsSync(adminIndex)) {
+      res.sendFile(adminIndex);
+      return;
+    }
+    res.status(404).json({ error: "Halaman admin belum dibuild." });
+  });
+
+  app.get(/^\/(.*)/, (req, res) => {
+    if (fs.existsSync(publicIndex)) {
+      res.sendFile(publicIndex);
+      return;
+    }
+    res.status(404).json({ error: "Frontend belum dibuild." });
+  });
+}
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error("Unhandled error", err);
