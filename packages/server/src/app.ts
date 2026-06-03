@@ -24,27 +24,6 @@ app.use(
   })
 );
 
-app.use(express.json());
-
-app.use(
-  session({
-    store: new PgSession({
-      pool,
-      tableName: "sessions",
-    }),
-    secret: process.env.SESSION_SECRET ?? "change-me",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 8 * 60 * 60 * 1000,
-    },
-  })
-);
-
-app.use("/api", publicRouter);
-app.use("/api/auth", authRouter);
-app.use("/api/admin", adminRouter);
-
 const publicDir = path.resolve(process.cwd(), "public");
 const adminDir = path.join(publicDir, "admin");
 const publicIndex = path.join(publicDir, "index.html");
@@ -54,7 +33,6 @@ const isProduction = process.env.NODE_ENV === "production";
 
 if (!isProduction) {
   // In dev mode, proxy non-API requests to Vite dev servers
-  // http-proxy-middleware v4: single options object with pathFilter
   const adminProxy = createProxyMiddleware({
     pathFilter: (path: string) => path.startsWith("/admin"),
     target: "http://localhost:5174",
@@ -75,7 +53,31 @@ if (!isProduction) {
 } else {
   app.use("/admin", express.static(adminDir));
   app.use(express.static(publicDir));
+}
 
+app.use(express.json());
+
+app.use(
+  session({
+    store: new PgSession({
+      pool,
+      tableName: "sessions",
+      createTableIfMissing: true,
+    }),
+    secret: process.env.SESSION_SECRET ?? "change-me",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 8 * 60 * 60 * 1000,
+    },
+  })
+);
+
+app.use("/api", publicRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/admin", adminRouter);
+
+if (isProduction) {
   app.get(/^\/admin\/(.*)/, (req, res) => {
     if (fs.existsSync(adminIndex)) {
       res.sendFile(adminIndex);

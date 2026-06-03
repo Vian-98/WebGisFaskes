@@ -1,5 +1,11 @@
-import { check, pgTable, text, uuid, timestamp } from "drizzle-orm/pg-core";
+import { check, pgTable, text, uuid, timestamp, customType } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+
+const geometry = customType<{ data: any }>({
+  dataType() {
+    return "geometry";
+  },
+});
 
 export const faskes = pgTable(
   "faskes",
@@ -10,6 +16,7 @@ export const faskes = pgTable(
     alamat: text("alamat").notNull().default(""),
     kecamatan: text("kecamatan").notNull().default(""),
     kelurahan: text("kelurahan").notNull().default(""),
+    geom: geometry("geom"),
   },
   (table) => ({
     geomNotNull: check("faskes_geom_not_null", sql`geom IS NOT NULL`),
@@ -22,6 +29,7 @@ export const boundaries = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     nama: text("nama").notNull(),
     level: text("level").notNull(),
+    geom: geometry("geom"),
   },
   (table) => ({
     levelCheck: check(
