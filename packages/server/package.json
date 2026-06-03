@@ -8,8 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "import:faskes": "tsx src/scripts/importFaskes.ts",
-    "import:boundary-centroids": "tsx src/scripts/importBoundaryCentroids.ts",
-    "generate:boundaries": "tsx src/scripts/generateBoundaries.ts"
+    "import:boundaries": "tsx src/scripts/importBoundaryJson.ts",
+    "clean:faskes": "tsx src/scripts/cleanFaskesOutsideBoundary.ts"
   },
   "keywords": [],
   "author": "",

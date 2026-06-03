@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import "./style.css";
 import { createStore } from "./state/store";
-import { filterByType, searchByName, findNearestFacilities } from "./analysis/query";
+import { filterByType, searchByName, findNearestFacilities, findBoundaryForPoint } from "./analysis/query";
 import {
   computeBufferZones,
   computeCoverageStats,
@@ -236,15 +236,28 @@ function renderFaskesMarkers() {
       `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>` +
       `Navigasi</a></div>`
     );
+    let isClicked = false;
 
     marker.on('mouseover', function (e) {
-      this.openPopup();
+      if (!isClicked) {
+        this.openPopup();
+      }
     });
     
     marker.on('mouseout', function (e) {
-      this.closePopup();
+      if (!isClicked) {
+        this.closePopup();
+      }
     });
 
+    marker.on('click', function (e) {
+      isClicked = true;
+      this.openPopup();
+    });
+
+    marker.on('popupclose', function (e) {
+      isClicked = false;
+    });
     marker.addTo(layers.faskes);
     markerMap.set(feature.properties.id, marker);
   });
@@ -343,14 +356,17 @@ function renderBuffers() {
 
 function renderAnalysisPoint() {
   layers.analysis.clearLayers();
-  const { analysisPoint, nearestFacilities } = store.getState();
+  const { analysisPoint, nearestFacilities, boundaries } = store.getState();
   if (!analysisPoint) {
     nearestList.innerHTML = "";
     btnExportCsvNearest.disabled = true;
     return;
   }
 
-  L.circleMarker([analysisPoint[1], analysisPoint[0]], {
+  const boundary = findBoundaryForPoint(analysisPoint, boundaries);
+  const kecamatanName = boundary ? boundary.properties.nama : "Tidak diketahui";
+
+  const marker = L.circleMarker([analysisPoint[1], analysisPoint[0]], {
     radius: 7,
     color: "#fff",
     fillColor: "#10b981",
@@ -358,6 +374,8 @@ function renderAnalysisPoint() {
     weight: 2,
     className: "pulse-marker"
   }).addTo(layers.analysis);
+
+  marker.bindPopup(`<div style="font-size:13px;"><strong>Titik Analisis</strong><br/><span style="color:var(--text-muted);">Kec. ${kecamatanName}</span></div>`).openPopup();
 
   nearestList.innerHTML = "";
   nearestFacilities.forEach((item) => {

@@ -51,33 +51,54 @@ SESSION_SECRET=rahasia-webgis-faskes
 
 ### 2) Inisialisasi Database & Import Data
 
-Jalankan perintah ini dari *root folder* untuk membuat tabel dan skema PostGIS:
+Terdapat dua skenario persiapan database, ikuti salah satu yang sesuai dengan kondisi Anda:
+
+#### Skenario A: Jika Memulai dari Nol (Instalasi Baru)
+Jalankan perintah ini dari *root folder* untuk membuat tabel dan skema PostGIS ke dalam database Anda:
 ```bash
 cd packages/server
 npx tsx src/db/migrate.ts
 ```
 
-**PENTING: Import Data Awal (CSV)**
-Agar peta tidak kosong, jalankan ketiga perintah berikut secara berurutan untuk memasukkan data Faskes dan membangun area Poligon Batas Wilayah:
+#### Skenario B: Jika Sudah Punya Versi Sebelumnya (Reset & Drop Data)
+Jika Anda sebelumnya sudah menjalankan aplikasi ini (memiliki versi/data lama) dan ingin melakukan reset total untuk menggunakan format/data batas wilayah terbaru:
+1. Buka database PostGIS Anda (menggunakan DBeaver/pgAdmin/psql).
+2. Jalankan perintah SQL berikut untuk **menghapus bersih (drop)** semua skema tabel lama dan membuat yang baru secara instan:
+   ```sql
+   DROP SCHEMA public CASCADE;
+   CREATE SCHEMA public;
+   -- Pastikan extension postgis aktif di public
+   CREATE EXTENSION IF NOT EXISTS postgis;
+   ```
+3. Hapus seluruh isi yang ada di dalam folder `packages/server/src/db/migrations`.
+4. Buka terminal di folder project, *generate* ulang migrasi dan terapkan ke database yang baru di-reset:
+   ```bash
+   cd packages/server
+   npx drizzle-kit generate
+   npx tsx src/db/migrate.ts
+   ```
 
-1. Import data Faskes:
+---
+
+**PENTING: Import Data Awal (Wajib untuk Kedua Skenario di Atas)**
+Agar peta memiliki data faskes dan batas wilayah, jalankan **keempat** perintah berikut secara berurutan (pastikan posisi terminal Anda berada di dalam folder `packages/server`):
+
+1. **Import data Faskes mentah** dari file CSV:
    ```bash
    npm run import:faskes -- "data/faskes_bandar_lampung_all.csv"
    ```
-2. Import titik tengah (centroid) wilayah:
+2. **Import Poligon Batas Wilayah** (Bandar Lampung) dari file GeoJSON:
    ```bash
-   npm run import:boundary-centroids -- "data/BatasWilayah_Kecamatan_BandarLampung.csv"
+   npm run import:boundaries -- "data/ADMINISTRASIKECAMATAN_AR_50K (1).json"
    ```
-3. Generate Poligon wilayah dari titik-titik centroid menggunakan PostGIS Voronoi:
+3. **Bersihkan Titik Offside**: Menghapus titik-titik Faskes yang lokasinya berada di luar area poligon Bandar Lampung:
    ```bash
-   npx tsx src/scripts/generateBoundaries.ts
+   npm run clean:faskes
    ```
-
-Buat kredensial admin awal:
-```bash
-npx tsx seedAdmin.ts
-```
-*(Default: Username `admin` & Password `password123`)*
+4. **Lengkapi Kolom Metadata**: Mengisi kolom 'Kecamatan' pada tabel Faskes secara otomatis menggunakan perhitungan *Spatial Intersection* dengan poligon yang telah diimpor sebelumnya:
+   ```bash
+   npx tsx src/scripts/fillKecamatan.ts
+   ```
 
 ### 3) Menjalankan Mode Development (Semua Lapis)
 
@@ -87,9 +108,42 @@ npm run dev:all
 ```
 Perintah ini akan secara ajaib menjalankan *Server Express* di port 3000, lalu mem-proxy UI dari Frontend dan Admin Panel Vite.
 
-### 4) Akses Web
+### 4) Akses Web & Login Admin
 - **Halaman Publik / Analisis GIS**: `http://localhost:3000/`
 - **Dashboard Admin**: `http://localhost:3000/admin/`
+
+Untuk mengakses Dashboard Admin, gunakan kredensial bawaan yang telah dibuat (atau buat ulang dengan `npx tsx src/scripts/seedAdmin.ts` dari dalam folder `packages/server`):
+- **Username**: `admin`
+- **Password**: `password123`
+
+---
+
+## 💾 Panduan Manajemen Database (Migrasi)
+
+Jika Anda melakukan perubahan pada skema tabel di file `src/db/schema.ts`, berikut adalah cara untuk mengelola migrasi menggunakan **Drizzle ORM**:
+
+### 1. Menghapus/Mereset Migrasi Lama (Reset Database)
+Jika Anda ingin mereset database ke kondisi kosong dan menghapus histori migrasi sebelumnya:
+1. Buka database Anda menggunakan DBeaver/pgAdmin.
+2. Jalankan perintah SQL berikut untuk mereset skema secara instan:
+   ```sql
+   DROP SCHEMA public CASCADE;
+   CREATE SCHEMA public;
+   ```
+3. Hapus seluruh isi folder `packages/server/src/db/migrations` di project Anda.
+
+### 2. Membuat Migrasi Baru (Generate)
+Setelah Anda mengubah file skema (`schema.ts`) atau mereset database, generate file migrasi baru dengan menjalankan:
+```bash
+cd packages/server
+npx drizzle-kit generate
+```
+
+### 3. Menerapkan Migrasi ke Database (Push/Migrate)
+Setelah file migrasi sukses dibuat, terapkan ke database PostGIS Anda:
+```bash
+npx tsx src/db/migrate.ts
+```
 
 ---
 

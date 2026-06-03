@@ -50,3 +50,19 @@ export function findNearestFacilities(
     .sort((a, b) => a.distanceKm - b.distanceKm)
     .slice(0, limit);
 }
+
+import * as turf from '@turf/turf';
+
+export function findBoundaryForPoint(point: [number, number], boundaries: any[]): any | null {
+  const pt = turf.point(point);
+  for (const b of boundaries) {
+    try {
+      if (turf.booleanPointInPolygon(pt, b)) {
+        return b;
+      }
+    } catch (e) {
+      // Ignore invalid geometry errors
+    }
+  }
+  return null;
+}

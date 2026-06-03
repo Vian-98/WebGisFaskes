@@ -267,6 +267,9 @@ h1, h2, h3, h4, .eyebrow {
 
 /* ── Sidebar ────────────────────────────────────────────────── */
 .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
   background: var(--sidebar-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -705,6 +708,8 @@ h1, h2, h3, h4, .eyebrow {
   }
 
   .sidebar {
+    height: auto;
+    z-index: 1000;
     flex-direction: row;
     padding: 16px 20px;
     overflow-x: auto;

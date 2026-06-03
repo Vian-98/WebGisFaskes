@@ -1,5 +1,6 @@
 import { fetchBoundaries, fetchFaskes } from "../data/apiClient";
 import { BoundaryFeature, FaskesFeature } from "../data/types";
+import { findBoundaryForPoint } from "../analysis/query";
 
 export type ErrorNotification = {
   type: "error" | "warning" | "info";
@@ -82,10 +83,21 @@ export function createStore(): Store {
         fetchBoundaries(),
       ]);
 
+      const boundaries = boundaryResult.valid;
+      const faskes = faskesResult.valid.map((feature) => {
+        if (!feature.properties.kecamatan || feature.properties.kecamatan === "-" || feature.properties.kecamatan.trim() === "") {
+          const boundary = findBoundaryForPoint(feature.geometry.coordinates as [number, number], boundaries);
+          if (boundary) {
+            feature.properties.kecamatan = boundary.properties.nama;
+          }
+        }
+        return feature;
+      });
+
       setState({
-        faskes: faskesResult.valid,
-        boundaries: boundaryResult.valid,
-        filteredFaskes: faskesResult.valid,
+        faskes: faskes,
+        boundaries: boundaries,
+        filteredFaskes: faskes,
         loading: false,
       });
     } catch (error) {
