@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build -w packages/frontend && npm run build -w packages/admin",
+  "buildCommand": "cd packages/frontend && npx vite build && cd ../admin && npx vite build",
   "outputDirectory": "packages/server/public",
   "installCommand": "npm install"
 }
