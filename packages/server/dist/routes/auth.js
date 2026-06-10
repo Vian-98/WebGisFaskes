@@ -42,6 +42,13 @@ router.post("/login", rateLimit_1.loginRateLimiter, async (req, res) => {
         res.status(503).json({ error: "Layanan tidak tersedia sementara." });
     }
 });
+router.get("/me", (req, res) => {
+    if (!req.session?.adminId) {
+        res.status(401).json({ error: "Tidak terautentikasi." });
+        return;
+    }
+    res.json({ ok: true, adminId: req.session.adminId });
+});
 router.post("/logout", auth_1.requireAuth, (req, res) => {
     req.session.destroy((err) => {
         if (err) {

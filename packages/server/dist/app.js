@@ -10,6 +10,7 @@ const express_session_1 = __importDefault(require("express-session"));
 const connect_pg_simple_1 = __importDefault(require("connect-pg-simple"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const http_proxy_middleware_1 = require("http-proxy-middleware");
 const db_1 = require("./db");
 const public_1 = __importDefault(require("./routes/public"));
 const auth_1 = __importDefault(require("./routes/auth"));
@@ -21,11 +22,38 @@ app.use((0, cors_1.default)({
     origin: true,
     credentials: true,
 }));
+const publicDir = path_1.default.resolve(process.cwd(), "public");
+const adminDir = path_1.default.join(publicDir, "admin");
+const publicIndex = path_1.default.join(publicDir, "index.html");
+const adminIndex = path_1.default.join(adminDir, "index.html");
+const isProduction = process.env.NODE_ENV === "production";
+if (!isProduction) {
+    // In dev mode, proxy non-API requests to Vite dev servers
+    const adminProxy = (0, http_proxy_middleware_1.createProxyMiddleware)({
+        pathFilter: (path) => path.startsWith("/admin"),
+        target: "http://localhost:5174",
+        changeOrigin: true,
+        ws: true,
+    });
+    const frontendProxy = (0, http_proxy_middleware_1.createProxyMiddleware)({
+        pathFilter: (path) => !path.startsWith("/api") && !path.startsWith("/admin"),
+        target: "http://localhost:5173",
+        changeOrigin: true,
+        ws: true,
+    });
+    app.use(adminProxy);
+    app.use(frontendProxy);
+}
+else {
+    app.use("/admin", express_1.default.static(adminDir));
+    app.use(express_1.default.static(publicDir));
+}
 app.use(express_1.default.json());
 app.use((0, express_session_1.default)({
     store: new PgSession({
         pool: db_1.pool,
         tableName: "sessions",
+        createTableIfMissing: true,
     }),
     secret: process.env.SESSION_SECRET ?? "change-me",
     resave: false,
@@ -37,26 +65,22 @@ app.use((0, express_session_1.default)({
 app.use("/api", public_1.default);
 app.use("/api/auth", auth_1.default);
 app.use("/api/admin", admin_1.default);
-const publicDir = path_1.default.resolve(process.cwd(), "public");
-const adminDir = path_1.default.join(publicDir, "admin");
-const publicIndex = path_1.default.join(publicDir, "index.html");
-const adminIndex = path_1.default.join(adminDir, "index.html");
-app.use("/admin", express_1.default.static(adminDir));
-app.use(express_1.default.static(publicDir));
-app.get(/^\/admin\/(.*)/, (req, res) => {
-    if (fs_1.default.existsSync(adminIndex)) {
-        res.sendFile(adminIndex);
-        return;
-    }
-    res.status(404).json({ error: "Halaman admin belum dibuild." });
-});
-app.get(/^\/(.*)/, (req, res) => {
-    if (fs_1.default.existsSync(publicIndex)) {
-        res.sendFile(publicIndex);
-        return;
-    }
-    res.status(404).json({ error: "Frontend belum dibuild." });
-});
+if (isProduction) {
+    app.get(/^\/admin\/(.*)/, (req, res) => {
+        if (fs_1.default.existsSync(adminIndex)) {
+            res.sendFile(adminIndex);
+            return;
+        }
+        res.status(404).json({ error: "Halaman admin belum dibuild." });
+    });
+    app.get(/^\/(.*)/, (req, res) => {
+        if (fs_1.default.existsSync(publicIndex)) {
+            res.sendFile(publicIndex);
+            return;
+        }
+        res.status(404).json({ error: "Frontend belum dibuild." });
+    });
+}
 app.use((err, req, res, next) => {
     console.error("Unhandled error", err);
     const message = err.message ?? "";

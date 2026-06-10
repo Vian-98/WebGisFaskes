@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "npm run dev -ws",
     "dev:all": "concurrently -n server,frontend,admin -c green,cyan,magenta \"npm run dev -w packages/server\" \"npm run dev -w packages/frontend\" \"npm run dev -w packages/admin\"",
-    "build:web": "npm run build -w packages/frontend && npm run build -w packages/admin",
-    "build": "npm run build -ws",
+    "build:web": "npm run build -w packages/frontend; npm run build -w packages/admin",
+    "build:all": "npm run build -ws",
+    "build": "npm run build -w packages/frontend; npm run build -w packages/admin",
     "test": "npm run test -ws"
   },
   "workspaces": [
