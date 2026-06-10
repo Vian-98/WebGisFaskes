@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd packages/frontend && npx vite build && cd ../admin && npx vite build",
+  "buildCommand": "ls -la && echo '---packages---' && ls -la packages/ && cd packages/frontend && npx vite build && cd ../admin && npx vite build",
   "outputDirectory": "packages/server/public",
   "installCommand": "npm install"
 }
