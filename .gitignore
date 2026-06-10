@@ -1,2 +1,4 @@
 node_modules
 dist
+packages/server/public
+packages/server/package-lock.json
